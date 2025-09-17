@@ -30,7 +30,7 @@ _creds  = _build_creds()
 _svc    = build("sheets", "v4", credentials=_creds)
 _values = _svc.spreadsheets().values()
 
-TAB = "'Schedule(ignore)'"     # visible schedule tab
+TAB = "'Schedule'"     # visible schedule tab
 START_ROW = 6
 MONTH_COLS = [("A","B","C"), ("F","G","H"), ("K","L","M")]  # [weekday, date, Raid?]
 
@@ -513,6 +513,7 @@ def is_today_raid_day() -> bool:
                 return True
     return False
 # ==============================================================================
+
 
 
 
