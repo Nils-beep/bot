@@ -143,3 +143,21 @@ async def rebuild_cmd(interaction: discord.Interaction, start_from_day1: bool = 
     except Exception as e:
         await interaction.followup.send(f"Rebuild failed: `{e}`")
 client.run(BOT_TOKEN)
+
+@client.tree.command(name="refresh", description="Refresh sheet (preserves ✔/✖ overrides).",
+                     guild=discord.Object(id=GUILD_ID))
+async def refresh_cmd(interaction: discord.Interaction):
+    # optional: restrict to your bot channel
+    if interaction.channel_id != CHANNEL_ID:
+        await interaction.response.send_message("Use this in the appointments channel.", ephemeral=True)
+        return
+
+    await interaction.response.defer(ephemeral=True, thinking=True)
+    try:
+        import sheets_client as sheets
+        sheets.refresh_schedule_preserve_overrides()
+        await interaction.followup.send("✅ Schedule refreshed (overrides preserved).", ephemeral=True)
+    except Exception as e:
+        await interaction.followup.send(f"❌ Refresh failed: `{e}`", ephemeral=True)
+
+
