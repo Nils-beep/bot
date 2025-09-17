@@ -219,72 +219,51 @@ def _desired_window(today: datetime) -> list[tuple[str,str,str]]:
 
 def refresh_schedule_preserve_overrides():
     """
-    Refresh the 3 blocks daily:
-      - Recompute the 3-month window starting today.
-      - Update headers.
-      - For each date, use a global override (✔/✖) if it exists anywhere
-        in the current sheet; otherwise use the default.
-      - Clear leftover rows.
+    Shift the 3-month schedule forward by 1 day, preserving ✔/✖ and
+    the associated names column. If a date moves out of range, it is dropped.
     """
     today = datetime.today()
-    overrides = _collect_overrides_all_blocks()   # <-- key change: global overrides
-    desired = _desired_window(today)
 
-    # compute which (year,month) each block represents now
-    month_tags: list[tuple[int,int]] = []
-    for idx in range(3):
-        m0 = today.month - 1 + idx
-        y  = today.year + (m0 // 12)
-        m  = (m0 % 12) + 1
-        month_tags.append((y, m))
+    for idx, cols in enumerate(MONTH_COLS):
+        c1, c2, c3 = cols
+        names_col = chr(ord(c3) + 1)   # the next column
 
-    # split desired rows per visual block
-    per_block: list[list[tuple[str,str,str]]] = [[], [], []]
-    for wd, date_s, default_flag in desired:
-        dt = datetime.strptime(date_s, "%d.%m.%Y")
-        ym = (dt.year, dt.month)
-        blk = month_tags.index(ym) if ym in month_tags else 2
-        per_block[blk].append((wd, date_s, default_flag))
+        # read the whole 31-row block including names
+        rng = f"{TAB}!{c1}{START_ROW}:{names_col}{START_ROW+30}"
+        resp = _values.get(spreadsheetId=SPREADSHEET_ID, range=rng).execute()
+        rows = resp.get("values", []) or []
 
-    # write each block
-    for blk_idx, (c1, c2, c3) in enumerate(MONTH_COLS):
-        y, m = month_tags[blk_idx]
+        new_rows = []
+        for r in rows:
+            if len(r) < 2 or not r[1]:
+                new_rows.append(["", "", "", ""])  # weekday, date, raid?, names
+                continue
 
-        # header
-        hdr = datetime(y, m, 1).strftime("%B %Y")
+            try:
+                dt = datetime.strptime(r[1], "%d.%m.%Y")
+            except ValueError:
+                new_rows.append(["", "", "", ""])
+                continue
+
+            # shift one day forward
+            dt_new = dt + timedelta(days=1)
+            if dt_new.month != (today.month - 1 + idx) % 12 + 1 and dt_new.month != today.month:
+                # moved out of this block's month → clear
+                new_rows.append(["", "", "", ""])
+            else:
+                wd = dt_new.strftime("%A")
+                date_s = dt_new.strftime("%d.%m.%Y")
+                raid = r[2] if len(r) >= 3 else ""
+                names = r[3] if len(r) >= 4 else ""
+                new_rows.append([wd, date_s, raid, names])
+
+        # write back the shifted block
         _values.update(
             spreadsheetId=SPREADSHEET_ID,
-            range=f"{TAB}!{c1}4",
+            range=rng,
             valueInputOption="USER_ENTERED",
-            body={"values": [[hdr]]}
+            body={"values": new_rows}
         ).execute()
-
-        # build rows using override map
-        desired_rows = per_block[blk_idx]
-        new_block: list[list[str]] = []
-        for wd, date_s, default_flag in desired_rows:
-            use_flag = overrides.get(date_s, default_flag)
-            new_block.append([wd, date_s, use_flag])
-
-        # write desired rows
-        if new_block:
-            _values.update(
-                spreadsheetId=SPREADSHEET_ID,
-                range=f"{TAB}!{c1}{START_ROW}:{c3}{START_ROW+len(new_block)-1}",
-                valueInputOption="USER_ENTERED",
-                body={"values": new_block}
-            ).execute()
-
-        # clear leftovers
-        leftover = 31 - len(new_block)
-        if leftover > 0:
-            empties = [["","",""]]*leftover
-            _values.update(
-                spreadsheetId=SPREADSHEET_ID,
-                range=f"{TAB}!{c1}{START_ROW+len(new_block)}:{c3}{START_ROW+30}",
-                valueInputOption="USER_ENTERED",
-                body={"values": empties}
-            ).execute()
 
 # The name column is the column *after* the "Raid?" column in each block:
 # (A,B,C) -> D, (E,F,G) -> H, (I,J,K) -> L
@@ -372,5 +351,6 @@ def remove_cant_user(date_str: str, user_name: str) -> tuple[bool, str, str]:
         new_flag = "✖" if items else "✔"
         return True, new_flag, joined
     return False, "", ""
+
 
 
