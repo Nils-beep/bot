@@ -117,8 +117,9 @@ def toggle_raid_date_in_visible_table(date_str: str) -> str | None:
     return None
 
 def _write_month_default(year: int, month: int, start_day: int, cols: tuple[str,str,str]):
-    """Overwrite one month block with defaults: Mon/Wed/Thu = ✔, else ✖."""
+    """Overwrite one month block with defaults: Mon/Wed/Thu = ✔, else ✖, and clear Names."""
     c1, c2, c3 = cols
+    names_col = _next_col(c3)  # column right of Raid?
     mlen = calendar.monthrange(year, month)[1]
 
     # Header: "Month YYYY"
@@ -130,32 +131,33 @@ def _write_month_default(year: int, month: int, start_day: int, cols: tuple[str,
         body={"values": [[hdr]]}
     ).execute()
 
-    # Rows: [Weekday, dd.mm.yyyy, Raid?]
+    # Rows: [Weekday, dd.mm.yyyy, Raid?, Names(blank)]
     rows = []
     for d in range(start_day, mlen + 1):
         dt = datetime(year, month, d)
         wd = dt.weekday()  # Mon=0 ... Sun=6
         raid = "✔" if wd in (0, 2, 3) else "✖"
-        rows.append([dt.strftime("%A"), dt.strftime("%d.%m.%Y"), raid])
+        rows.append([dt.strftime("%A"), dt.strftime("%d.%m.%Y"), raid, ""])
 
     if rows:
         _values.update(
             spreadsheetId=SPREADSHEET_ID,
-            range=f"{TAB}!{c1}{START_ROW}:{c3}{START_ROW + len(rows) - 1}",
+            range=f"{TAB}!{c1}{START_ROW}:{names_col}{START_ROW + len(rows) - 1}",
             valueInputOption="USER_ENTERED",
             body={"values": rows}
         ).execute()
 
-    # Clear leftover lines up to 31 rows
+    # Clear leftover lines up to 31 rows (across 4 columns)
     left = 31 - len(rows)
     if left > 0:
-        empties = [["", "", ""]] * left
+        empties = [["", "", "", ""]]*left
         _values.update(
             spreadsheetId=SPREADSHEET_ID,
-            range=f"{TAB}!{c1}{START_ROW + len(rows)}:{c3}{START_ROW + 30}",
+            range=f"{TAB}!{c1}{START_ROW + len(rows)}:{names_col}{START_ROW + 30}",
             valueInputOption="USER_ENTERED",
             body={"values": empties}
         ).execute()
+
 
 def rebuild_schedule(start_current_from_today: bool = True):
     """
@@ -371,4 +373,5 @@ def remove_cant_user(date_str: str, user_name: str) -> tuple[bool, str, str]:
         new_flag = "✖" if items else "✔"
         return True, new_flag, joined
     return False, "", ""
+
 
