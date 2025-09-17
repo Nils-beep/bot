@@ -164,7 +164,103 @@ async def refresh_cmd(interaction: discord.Interaction):
         await interaction.followup.send("✅ Schedule refreshed (overrides preserved).", ephemeral=True)
     except Exception as e:
         await interaction.followup.send(f"❌ Refresh failed: `{e}`", ephemeral=True)
+from discord.ext import tasks
 
+# /remind on [time]
+@client.tree.command(
+    name="remind_on",
+    description="Enable raid-day reminders (✔ days). Optional time HH:MM (server time).",
+    guild=discord.Object(id=GUILD_ID)
+)
+@app_commands.describe(time="HH:MM (24h). Default 17:00")
+async def remind_on(interaction: discord.Interaction, time: str | None = None):
+    if interaction.channel_id != CHANNEL_ID:
+        await interaction.response.send_message("Only in appointments please :/", ephemeral=True)
+        return
+    await interaction.response.defer(ephemeral=True, thinking=True)
+
+    hhmm = (time or "17:00").strip()
+    # naive sanity
+    try:
+        h,m = map(int, hhmm.split(":"))
+        assert 0 <= h <= 23 and 0 <= m <= 59
+    except Exception:
+        await interaction.followup.send("Time must be HH:MM (24-hour), e.g. 17:00", ephemeral=True)
+        return
+
+    await asyncio.to_thread(
+        sheets.set_reminder,
+        interaction.user.id,
+        f"{interaction.user.name}#{interaction.user.discriminator}" if hasattr(interaction.user,"discriminator") else interaction.user.name,
+        True,
+        hhmm
+    )
+    await interaction.followup.send(f"✅ Reminders enabled at **{hhmm}** on ✔ days.", ephemeral=True)
+
+# /remind off
+@client.tree.command(
+    name="remind_off",
+    description="Disable raid-day reminders.",
+    guild=discord.Object(id=GUILD_ID)
+)
+async def remind_off(interaction: discord.Interaction):
+    if interaction.channel_id != CHANNEL_ID:
+        await interaction.response.send_message("Only in appointments please :/", ephemeral=True)
+        return
+    await interaction.response.defer(ephemeral=True, thinking=True)
+
+    await asyncio.to_thread(
+        sheets.set_reminder,
+        interaction.user.id,
+        f"{interaction.user.name}#{interaction.user.discriminator}" if hasattr(interaction.user,"discriminator") else interaction.user.name,
+        False
+    )
+    await interaction.followup.send("🛑 Reminders disabled.", ephemeral=True)
+
+def _now_hhmm() -> str:
+    return datetime.now().strftime("%H:%M")  # server time
+
+@tasks.loop(minutes=1)
+async def reminder_loop():
+    try:
+        # Fast exit if today isn’t a raid day
+        if not await asyncio.to_thread(sheets.is_today_raid_day):
+            return
+
+        reminders = await asyncio.to_thread(sheets.get_enabled_reminders)
+        if not reminders:
+            return
+
+        now_hhmm = _now_hhmm()
+        today_iso = datetime.today().strftime("%Y-%m-%d")
+        to_ping = [r for r in reminders if (r["time"] == now_hhmm and r.get("last","") != today_iso)]
+
+        if not to_ping:
+            return
+
+        # Build mentions and send once
+        channel = client.get_channel(CHANNEL_ID)
+        if channel is None:
+            return
+
+        mentions = " ".join(f"<@{r['user_id']}>" for r in to_ping)
+        await channel.send(f"⏰ Raid reminder (✔ today)! {mentions}")
+
+        # Mark notified
+        for r in to_ping:
+            await asyncio.to_thread(sheets.mark_notified, r["user_id"], today_iso)
+
+    except Exception as e:
+        # Optional: log to console
+        print(f"[reminder_loop] error: {e}")
+
+@reminder_loop.before_loop
+async def _wait_until_ready():
+    await client.wait_until_ready()
+
+
+reminder_loop.start()
 client.run(BOT_TOKEN)
+
 
 
