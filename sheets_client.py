@@ -390,5 +390,129 @@ def remove_cant_user(date_str: str, user_name: str) -> tuple[bool, str, str]:
         return True, new_flag, joined
     return False, "", ""
 
+# ================= Reminders on existing sheet (starting row 300) =================
+
+REM_START_ROW = 300         # header row (A300:E300)
+REM_MAX_ROWS  = 1000        # how many lines to scan below the header (A301..A1299)
+
+def _rem_a1(suffix: str) -> str:
+    """Build A1 ranges on the same Schedule tab for the reminders block."""
+    return f"{TAB}!{suffix}"
+
+def _ensure_reminders_header():
+    """Ensure header exists at A300:E300 on the Schedule sheet."""
+    hdr_rng = _rem_a1(f"A{REM_START_ROW}:E{REM_START_ROW}")
+    existing = _values.get(spreadsheetId=SPREADSHEET_ID, range=hdr_rng).execute().get("values", [])
+    hdr = ["UserID","UserTag","Enabled","Time","LastNotified"]
+    if not existing or existing[0] != hdr:
+        _values.update(
+            spreadsheetId=SPREADSHEET_ID,
+            range=hdr_rng,
+            valueInputOption="USER_ENTERED",
+            body={"values":[hdr]}
+        ).execute()
+
+def _clean_hhmm(hhmm: str) -> str:
+    """Very small HH:MM sanity (00:00..23:59). Returns cleaned or raises ValueError."""
+    hhmm = (hhmm or "").strip()
+    h, m = hhmm.split(":")
+    h, m = int(h), int(m)
+    if not (0 <= h <= 23 and 0 <= m <= 59):
+        raise ValueError("HH:MM out of range")
+    return f"{h:02d}:{m:02d}"
+
+def set_reminder(user_id: int, user_tag: str, enable: bool, time_hhmm: str = "17:00"):
+    """
+    Create/update a user's reminder row in the Schedule sheet at A300+.
+    Columns: UserID | UserTag | Enabled(Y/N) | Time(HH:MM) | LastNotified(YYYY-MM-DD)
+    """
+    _ensure_reminders_header()
+    time_hhmm = _clean_hhmm(time_hhmm)
+
+    data_rng = _rem_a1(f"A{REM_START_ROW+1}:E{REM_START_ROW+REM_MAX_ROWS}")
+    resp = _values.get(spreadsheetId=SPREADSHEET_ID, range=data_rng).execute()
+    rows = resp.get("values", []) or []
+
+    uid = str(user_id)
+    found_i = None
+    for i, r in enumerate(rows):
+        if r and len(r) >= 1 and r[0] == uid:
+            found_i = i
+            break
+
+    enabled = "Y" if enable else "N"
+    last = rows[found_i][4] if (found_i is not None and len(rows[found_i]) >= 5) else ""
+
+    if found_i is None:
+        # append on the first empty row after existing rows
+        append_rownum = REM_START_ROW + 1 + len(rows)
+        _values.update(
+            spreadsheetId=SPREADSHEET_ID,
+            range=_rem_a1(f"A{append_rownum}:E{append_rownum}"),
+            valueInputOption="USER_ENTERED",
+            body={"values":[[uid, user_tag, enabled, time_hhmm, ""]]}
+        ).execute()
+    else:
+        # overwrite that specific row
+        rownum = REM_START_ROW + 1 + found_i
+        _values.update(
+            spreadsheetId=SPREADSHEET_ID,
+            range=_rem_a1(f"A{rownum}:E{rownum}"),
+            valueInputOption="USER_ENTERED",
+            body={"values":[[uid, user_tag, enabled, time_hhmm, last]]}
+        ).execute()
+
+def get_enabled_reminders() -> list[dict]:
+    """
+    Return enabled reminders from the block at A300+:
+      [{'user_id': int, 'time': 'HH:MM', 'last': 'YYYY-MM-DD'}]
+    """
+    _ensure_reminders_header()
+    data_rng = _rem_a1(f"A{REM_START_ROW+1}:E{REM_START_ROW+REM_MAX_ROWS}")
+    rows = _values.get(spreadsheetId=SPREADSHEET_ID, range=data_rng).execute().get("values", []) or []
+    out = []
+    for r in rows:
+        # r may be shorter than 5 if user hand-deleted trailing cells
+        if len(r) >= 4 and str(r[2]).upper() == "Y":
+            out.append({
+                "user_id": int(r[0]),
+                "time": r[3],
+                "last": (r[4] if len(r) >= 5 else "")
+            })
+    return out
+
+def mark_notified(user_id: int, date_iso: str):
+    """
+    Set LastNotified (column E) for the user in the A300+ block.
+    """
+    _ensure_reminders_header()
+    data_rng = _rem_a1(f"A{REM_START_ROW+1}:E{REM_START_ROW+REM_MAX_ROWS}")
+    rows = _values.get(spreadsheetId=SPREADSHEET_ID, range=data_rng).execute().get("values", []) or []
+    uid = str(user_id)
+    for i, r in enumerate(rows):
+        if r and len(r) >= 1 and r[0] == uid:
+            rownum = REM_START_ROW + 1 + i
+            _values.update(
+                spreadsheetId=SPREADSHEET_ID,
+                range=_rem_a1(f"E{rownum}"),
+                valueInputOption="USER_ENTERED",
+                body={"values":[[date_iso]]}
+            ).execute()
+            break
+
+def is_today_raid_day() -> bool:
+    """
+    True if today's date exists in any visible block with a ✔. (reuses your schedule columns)
+    """
+    today_s = datetime.today().strftime("%d.%m.%Y")
+    for (c1, c2, c3) in MONTH_COLS:
+        rng = _rem_a1(f"{c1}{START_ROW}:{c3}{START_ROW+30}")
+        rows = _values.get(spreadsheetId=SPREADSHEET_ID, range=rng).execute().get("values", []) or []
+        for r in rows:
+            if len(r) >= 3 and r[1] and r[1].strip() == today_s and r[2].strip() == "✔":
+                return True
+    return False
+# ==============================================================================
+
 
 
