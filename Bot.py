@@ -69,6 +69,7 @@ def _valid_date(date_str: str) -> bool:
     except ValueError:
         return False
 
+# /cant — add name, force ✖
 @client.tree.command(
     name="cant",
     description="Put a ✖ on a date (e.g., 7.9 or 7.9.2025).",
@@ -79,22 +80,23 @@ async def cant(interaction: discord.Interaction, date: str):
     if interaction.channel_id != CHANNEL_ID:
         await interaction.response.send_message("Only in appointments please :/", ephemeral=True)
         return
-
-    # respond fast to avoid 'Unknown interaction'
     await interaction.response.defer(ephemeral=True, thinking=True)
 
     try:
-        norm = normalize_date(date)  # -> 'dd.mm.yyyy'
+        norm = normalize_date(date)
     except ValueError as e:
         await interaction.followup.send(f"Invalid date: {e}. Examples: 7.9  or  07.09.2025")
         return
 
-    ok = await asyncio.to_thread(sheets.set_raid_date_in_visible_table, norm, False)
-    if ok:
-        await interaction.followup.send(f"Saved: **{norm}** → ✖")
+    # prefer server display name
+    user_name = interaction.user.display_name or interaction.user.name
+    found, names = await asyncio.to_thread(sheets.add_cant_user, norm, user_name)
+    if found:
+        await interaction.followup.send(f"Saved: **{norm}** → ✖  (can't: {names})")
     else:
         await interaction.followup.send("Date not found in the current 3-month range.")
 
+# /can — remove name; if none left → ✔, else keep ✖
 @client.tree.command(
     name="can",
     description="Put a ✔ on a date (e.g., 7.9 or 7.9.2025).",
@@ -105,7 +107,6 @@ async def can_cmd(interaction: discord.Interaction, date: str):
     if interaction.channel_id != CHANNEL_ID:
         await interaction.response.send_message("Only in appointments please :/", ephemeral=True)
         return
-
     await interaction.response.defer(ephemeral=True, thinking=True)
 
     try:
@@ -114,11 +115,16 @@ async def can_cmd(interaction: discord.Interaction, date: str):
         await interaction.followup.send(f"Invalid date: {e}. Examples: 7.9  or  07.09.2025")
         return
 
-    ok = await asyncio.to_thread(sheets.set_raid_date_in_visible_table, norm, True)
-    if ok:
-        await interaction.followup.send(f"Saved: **{norm}** → ✔")
+    user_name = interaction.user.display_name or interaction.user.name
+    found, new_flag, names = await asyncio.to_thread(sheets.remove_cant_user, norm, user_name)
+    if found:
+        if names:
+            await interaction.followup.send(f"Updated: **{norm}** → {new_flag}  (can't: {names})")
+        else:
+            await interaction.followup.send(f"Updated: **{norm}** → ✔  (nobody marked as can't)")
     else:
         await interaction.followup.send("Date not found in the current 3-month range.")
+
 @client.tree.command(
     name="rebuild",
     description="Rebuild the 3-month schedule (defaults: Mon/Wed/Thu = ✔).",
@@ -160,4 +166,5 @@ async def refresh_cmd(interaction: discord.Interaction):
         await interaction.followup.send(f"❌ Refresh failed: `{e}`", ephemeral=True)
 
 client.run(BOT_TOKEN)
+
 
