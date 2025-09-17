@@ -217,53 +217,92 @@ def _desired_window(today: datetime) -> list[tuple[str,str,str]]:
             rows.append((_WD_NAMES[wd], _ddmmyyyy(dt), default))
     return rows
 
-def refresh_schedule_preserve_overrides():
-    """
-    Shift the 3-month schedule forward by 1 day, preserving ✔/✖ and
-    the associated names column. If a date moves out of range, it is dropped.
-    """
-    today = datetime.today()
-
-    for idx, cols in enumerate(MONTH_COLS):
-        c1, c2, c3 = cols
-        names_col = chr(ord(c3) + 1)   # the next column
-
-        # read the whole 31-row block including names
+# Collect ✔/✖ and names from all three blocks keyed by date string
+def _collect_flags_and_names() -> tuple[dict[str, str], dict[str, str]]:
+    flags: dict[str, str] = {}
+    names: dict[str, str] = {}
+    for (c1, c2, c3) in MONTH_COLS:
+        names_col = chr(ord(c3) + 1)
         rng = f"{TAB}!{c1}{START_ROW}:{names_col}{START_ROW+30}"
         resp = _values.get(spreadsheetId=SPREADSHEET_ID, range=rng).execute()
         rows = resp.get("values", []) or []
-
-        new_rows = []
         for r in rows:
-            if len(r) < 2 or not r[1]:
-                new_rows.append(["", "", "", ""])  # weekday, date, raid?, names
-                continue
+            if len(r) >= 2 and r[1]:
+                date_s = r[1].strip()
+                if len(r) >= 3 and r[2].strip() in ("✔","✖"):
+                    flags[date_s] = r[2].strip()
+                if len(r) >= 4 and r[3].strip():
+                    names[date_s] = r[3].strip()
+    return flags, names
 
-            try:
-                dt = datetime.strptime(r[1], "%d.%m.%Y")
-            except ValueError:
-                new_rows.append(["", "", "", ""])
-                continue
+def refresh_schedule_preserve_overrides():
+    """
+    Rebuild the 3 visible month blocks starting **today**.
+    - Updates month headers.
+    - For each date in the new window, applies any existing ✔/✖ and NAMES
+      found anywhere in the old 3 blocks (keyed by date string).
+    - Does NOT shift dates; it preserves values by matching same dd.mm.yyyy.
+    """
+    today = datetime.today()
+    flags_map, names_map = _collect_flags_and_names()
+    desired = _desired_window(today)  # (Weekday, dd.mm.yyyy, default_flag)
 
-            # shift one day forward
-            dt_new = dt + timedelta(days=1)
-            if dt_new.month != (today.month - 1 + idx) % 12 + 1 and dt_new.month != today.month:
-                # moved out of this block's month → clear
-                new_rows.append(["", "", "", ""])
-            else:
-                wd = dt_new.strftime("%A")
-                date_s = dt_new.strftime("%d.%m.%Y")
-                raid = r[2] if len(r) >= 3 else ""
-                names = r[3] if len(r) >= 4 else ""
-                new_rows.append([wd, date_s, raid, names])
+    # Which (year,month) each block represents
+    month_tags: list[tuple[int,int]] = []
+    for idx in range(3):
+        m0 = today.month - 1 + idx
+        y  = today.year + (m0 // 12)
+        m  = (m0 % 12) + 1
+        month_tags.append((y, m))
 
-        # write back the shifted block
+    # Partition desired rows to corresponding block
+    per_block: list[list[tuple[str,str,str]]] = [[], [], []]
+    for wd, date_s, default_flag in desired:
+        dt = datetime.strptime(date_s, "%d.%m.%Y")
+        ym = (dt.year, dt.month)
+        blk = month_tags.index(ym) if ym in month_tags else 2
+        per_block[blk].append((wd, date_s, default_flag))
+
+    # Write each block with preserved flags & names
+    for blk_idx, (c1, c2, c3) in enumerate(MONTH_COLS):
+        y, m = month_tags[blk_idx]
+        names_col = chr(ord(c3) + 1)
+
+        # Header
+        hdr = datetime(y, m, 1).strftime("%B %Y")
         _values.update(
             spreadsheetId=SPREADSHEET_ID,
-            range=rng,
+            range=f"{TAB}!{c1}4",
             valueInputOption="USER_ENTERED",
-            body={"values": new_rows}
+            body={"values": [[hdr]]}
         ).execute()
+
+        desired_rows = per_block[blk_idx]
+        new_block: list[list[str]] = []
+        for wd, date_s, default_flag in desired_rows:
+            flag  = flags_map.get(date_s, default_flag)
+            names = names_map.get(date_s, "")
+            new_block.append([wd, date_s, flag, names])
+
+        # Write rows (Weekday, Date, Raid?, Names)
+        if new_block:
+            _values.update(
+                spreadsheetId=SPREADSHEET_ID,
+                range=f"{TAB}!{c1}{START_ROW}:{names_col}{START_ROW+len(new_block)-1}",
+                valueInputOption="USER_ENTERED",
+                body={"values": new_block}
+            ).execute()
+
+        # Clear leftovers
+        leftover = 31 - len(new_block)
+        if leftover > 0:
+            empties = [["","","",""]]*leftover
+            _values.update(
+                spreadsheetId=SPREADSHEET_ID,
+                range=f"{TAB}!{c1}{START_ROW+len(new_block)}:{names_col}{START_ROW+30}",
+                valueInputOption="USER_ENTERED",
+                body={"values": empties}
+            ).execute()
 
 # The name column is the column *after* the "Raid?" column in each block:
 # (A,B,C) -> D, (E,F,G) -> H, (I,J,K) -> L
@@ -351,6 +390,7 @@ def remove_cant_user(date_str: str, user_name: str) -> tuple[bool, str, str]:
         new_flag = "✖" if items else "✔"
         return True, new_flag, joined
     return False, "", ""
+
 
 
 
