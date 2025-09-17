@@ -2,9 +2,11 @@
 import os
 import discord
 from discord import app_commands
+from discord.ext import tasks        
 from datetime import datetime
 import sheets_client as sheets
 import asyncio
+
 
 BOT_TOKEN  = os.environ["BOT_TOKEN"]
 CHANNEL_ID = 1417511115734388887
@@ -20,6 +22,11 @@ class MyClient(discord.Client):
     async def setup_hook(self):
         guild = discord.Object(id=GUILD_ID)
         await self.tree.sync(guild=guild)
+
+        # Start background reminder loop AFTER the bot is ready/loop exists
+        if not reminder_loop.is_running():
+            reminder_loop.start()
+
 
 client = MyClient()
 
@@ -159,12 +166,10 @@ async def refresh_cmd(interaction: discord.Interaction):
 
     await interaction.response.defer(ephemeral=True, thinking=True)
     try:
-        import sheets_client as sheets
         sheets.refresh_schedule_preserve_overrides()
         await interaction.followup.send("✅ Schedule refreshed (overrides preserved).", ephemeral=True)
     except Exception as e:
         await interaction.followup.send(f"❌ Refresh failed: `{e}`", ephemeral=True)
-from discord.ext import tasks
 
 # /remind on [time]
 @client.tree.command(
@@ -258,9 +263,8 @@ async def reminder_loop():
 async def _wait_until_ready():
     await client.wait_until_ready()
 
-
-reminder_loop.start()
 client.run(BOT_TOKEN)
+
 
 
 
