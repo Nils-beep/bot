@@ -142,7 +142,6 @@ async def rebuild_cmd(interaction: discord.Interaction, start_from_day1: bool = 
         await interaction.followup.send("Schedule rebuilt.")
     except Exception as e:
         await interaction.followup.send(f"Rebuild failed: `{e}`")
-client.run(BOT_TOKEN)
 
 @client.tree.command(name="refresh", description="Refresh sheet (preserves ✔/✖ overrides).",
                      guild=discord.Object(id=GUILD_ID))
@@ -160,4 +159,5 @@ async def refresh_cmd(interaction: discord.Interaction):
     except Exception as e:
         await interaction.followup.send(f"❌ Refresh failed: `{e}`", ephemeral=True)
 
+client.run(BOT_TOKEN)
 
