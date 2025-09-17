@@ -286,3 +286,90 @@ def refresh_schedule_preserve_overrides():
                 body={"values": empties}
             ).execute()
 
+# The name column is the column *after* the "Raid?" column in each block:
+# (A,B,C) -> D, (E,F,G) -> H, (I,J,K) -> L
+def _next_col(col_letter: str) -> str:
+    return chr(ord(col_letter) + 1)
+
+def _read_cell(range_a1: str) -> str:
+    resp = _values.get(spreadsheetId=SPREADSHEET_ID, range=range_a1).execute()
+    vals = resp.get("values", [])
+    return (vals[0][0].strip() if vals and vals[0] else "")
+
+def _write_cell(range_a1: str, value: str):
+    _values.update(
+        spreadsheetId=SPREADSHEET_ID,
+        range=range_a1,
+        valueInputOption="USER_ENTERED",
+        body={"values": [[value]]}
+    ).execute()
+
+def add_cant_user(date_str: str, user_name: str) -> tuple[bool, str]:
+    """
+    Add user_name to the “names” cell next to Raid? for the given date
+    and set Raid? to ✖. Returns (True, joined_names) if date found, else (False, "").
+    """
+    for (c1, c2, c3) in MONTH_COLS:
+        rows, idx = _read_month_block((c1, c2, c3))
+        hit = idx.get(date_str)
+        if not hit:
+            continue
+        row_i, _cur = hit
+        target_row = START_ROW + row_i
+
+        raid_col = c3
+        names_col = _next_col(c3)   # D / H / L
+
+        names_rng = f"{TAB}!{names_col}{target_row}"
+        current = _read_cell(names_rng)
+        # maintain a comma-separated, trimmed, case-insensitive set
+        existing = [p.strip() for p in current.split(",") if p.strip()] if current else []
+        # avoid duplicates (case-insensitive)
+        if user_name.lower() not in [x.lower() for x in existing]:
+            existing.append(user_name)
+
+        joined = ", ".join(existing)
+
+        # write names and force ✖
+        _write_cell(names_rng, joined)
+        _write_cell(f"{TAB}!{raid_col}{target_row}", "✖")
+
+        return True, joined
+    return False, ""
+
+def remove_cant_user(date_str: str, user_name: str) -> tuple[bool, str, str]:
+    """
+    Remove user_name from the names list for the date.
+    If the list becomes empty -> set Raid? to ✔, else keep ✖.
+    Returns (found, new_flag, joined_names). If not found: (False, "", "").
+    """
+    for (c1, c2, c3) in MONTH_COLS:
+        rows, idx = _read_month_block((c1, c2, c3))
+        hit = idx.get(date_str)
+        if not hit:
+            continue
+        row_i, cur_flag = hit
+        target_row = START_ROW + row_i
+
+        raid_col = c3
+        names_col = _next_col(c3)
+
+        names_rng = f"{TAB}!{names_col}{target_row}"
+        current = _read_cell(names_rng)
+        items = [p.strip() for p in current.split(",") if p.strip()] if current else []
+        # remove case-insensitively
+        items = [x for x in items if x.lower() != user_name.lower()]
+        joined = ", ".join(items)
+
+        if items:
+            # still people who can't: keep ✖
+            _write_cell(f"{TAB}!{raid_col}{target_row}", "✖")
+        else:
+            # nobody left: flip to ✔
+            _write_cell(f"{TAB}!{raid_col}{target_row}", "✔")
+
+        _write_cell(names_rng, joined)
+        new_flag = "✖" if items else "✔"
+        return True, new_flag, joined
+    return False, "", ""
+
