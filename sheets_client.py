@@ -172,4 +172,117 @@ def rebuild_schedule(start_current_from_today: bool = True):
         start_day = (today.day if (idx == 0 and start_current_from_today) else 1)
         _write_month_default(y, m, start_day, cols)
 
+# ===== Daily refresh that preserves overrides ACROSS blocks =====
+
+_WD_NAMES = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
+
+def _ddmmyyyy(dt: datetime) -> str:
+    return dt.strftime("%d.%m.%Y")
+
+def _collect_overrides_all_blocks() -> dict[str, str]:
+    """
+    Read all three visible blocks and collect any explicit ✔/✖ by date,
+    regardless of which block the date is currently in.
+    """
+    overrides: dict[str, str] = {}
+    for (c1, c2, c3) in MONTH_COLS:
+        rng = f"{TAB}!{c1}{START_ROW}:{c3}{START_ROW+30}"
+        resp = _values.get(spreadsheetId=SPREADSHEET_ID, range=rng).execute()
+        rows = resp.get("values", []) or []
+        for r in rows:
+            if len(r) >= 3 and r[1]:
+                date_s = r[1].strip()
+                flag = r[2].strip()
+                if flag in ("✔", "✖"):
+                    overrides[date_s] = flag
+    return overrides
+
+def _desired_window(today: datetime) -> list[tuple[str,str,str]]:
+    """
+    Build desired 3-month window starting today.
+    Returns rows: (Weekday, dd.mm.yyyy, default_flag)
+    Defaults: Mon/Wed/Thu = ✔, otherwise ✖.
+    """
+    rows: list[tuple[str,str,str]] = []
+    for idx in range(3):
+        m0 = today.month - 1 + idx
+        y  = today.year + (m0 // 12)
+        m  = (m0 % 12) + 1
+        start_day = today.day if idx == 0 else 1
+        mlen = calendar.monthrange(y, m)[1]
+        for d in range(start_day, mlen + 1):
+            dt = datetime(y, m, d)
+            wd = dt.weekday()
+            default = "✔" if wd in (0, 2, 3) else "✖"
+            rows.append((_WD_NAMES[wd], _ddmmyyyy(dt), default))
+    return rows
+
+def refresh_schedule_preserve_overrides():
+    """
+    Refresh the 3 blocks daily:
+      - Recompute the 3-month window starting today.
+      - Update headers.
+      - For each date, use a global override (✔/✖) if it exists anywhere
+        in the current sheet; otherwise use the default.
+      - Clear leftover rows.
+    """
+    today = datetime.today()
+    overrides = _collect_overrides_all_blocks()   # <-- key change: global overrides
+    desired = _desired_window(today)
+
+    # compute which (year,month) each block represents now
+    month_tags: list[tuple[int,int]] = []
+    for idx in range(3):
+        m0 = today.month - 1 + idx
+        y  = today.year + (m0 // 12)
+        m  = (m0 % 12) + 1
+        month_tags.append((y, m))
+
+    # split desired rows per visual block
+    per_block: list[list[tuple[str,str,str]]] = [[], [], []]
+    for wd, date_s, default_flag in desired:
+        dt = datetime.strptime(date_s, "%d.%m.%Y")
+        ym = (dt.year, dt.month)
+        blk = month_tags.index(ym) if ym in month_tags else 2
+        per_block[blk].append((wd, date_s, default_flag))
+
+    # write each block
+    for blk_idx, (c1, c2, c3) in enumerate(MONTH_COLS):
+        y, m = month_tags[blk_idx]
+
+        # header
+        hdr = datetime(y, m, 1).strftime("%B %Y")
+        _values.update(
+            spreadsheetId=SPREADSHEET_ID,
+            range=f"{TAB}!{c1}4",
+            valueInputOption="USER_ENTERED",
+            body={"values": [[hdr]]}
+        ).execute()
+
+        # build rows using override map
+        desired_rows = per_block[blk_idx]
+        new_block: list[list[str]] = []
+        for wd, date_s, default_flag in desired_rows:
+            use_flag = overrides.get(date_s, default_flag)
+            new_block.append([wd, date_s, use_flag])
+
+        # write desired rows
+        if new_block:
+            _values.update(
+                spreadsheetId=SPREADSHEET_ID,
+                range=f"{TAB}!{c1}{START_ROW}:{c3}{START_ROW+len(new_block)-1}",
+                valueInputOption="USER_ENTERED",
+                body={"values": new_block}
+            ).execute()
+
+        # clear leftovers
+        leftover = 31 - len(new_block)
+        if leftover > 0:
+            empties = [["","",""]]*leftover
+            _values.update(
+                spreadsheetId=SPREADSHEET_ID,
+                range=f"{TAB}!{c1}{START_ROW+len(new_block)}:{c3}{START_ROW+30}",
+                valueInputOption="USER_ENTERED",
+                body={"values": empties}
+            ).execute()
 
