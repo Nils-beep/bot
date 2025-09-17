@@ -32,7 +32,7 @@ _values = _svc.spreadsheets().values()
 
 TAB = "'Schedule(ignore)'"     # visible schedule tab
 START_ROW = 6
-MONTH_COLS = [("A","B","C"), ("E","F","G"), ("I","J","K")]  # [weekday, date, Raid?]
+MONTH_COLS = [("A","B","C"), ("F","G","H"), ("K","L","M")]  # [weekday, date, Raid?]
 
 CANT_TAB = "Cant"  # a simple log: who can't raid on which date
 CANT_RANGE = f"'{CANT_TAB}'!A1:D1"
@@ -371,3 +371,4 @@ def remove_cant_user(date_str: str, user_name: str) -> tuple[bool, str, str]:
         new_flag = "✖" if items else "✔"
         return True, new_flag, joined
     return False, "", ""
+
