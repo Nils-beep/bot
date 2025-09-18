@@ -311,10 +311,21 @@ def refresh_schedule_preserve_overrides():
                 body={"values": empties}
             ).execute()
 
-# The name column is the column *after* the "Raid?" column in each block:
-# (A,B,C) -> D, (E,F,G) -> H, (I,J,K) -> L
+# The name column is the column *after* the "Raid?" column in each block.
+# Works for A..Z, AA..AZ, BA.., etc.
 def _next_col(col_letter: str) -> str:
-    return chr(ord(col_letter) + 1)
+    # convert letters -> number (A=1, B=2, ..., Z=26, AA=27, ...)
+    n = 0
+    for ch in col_letter:
+        n = n * 26 + (ord(ch) - ord('A') + 1)
+    n += 1  # next column
+    # convert number -> letters
+    out = []
+    while n > 0:
+        n, rem = divmod(n - 1, 26)
+        out.append(chr(rem + ord('A')))
+    return "".join(reversed(out))
+
 
 def _read_cell(range_a1: str) -> str:
     resp = _values.get(spreadsheetId=SPREADSHEET_ID, range=range_a1).execute()
@@ -576,6 +587,7 @@ def is_today_raid_day() -> bool:
                 return True
     return False
 # ==============================================================================
+
 
 
 
