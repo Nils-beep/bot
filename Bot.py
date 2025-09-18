@@ -4,6 +4,7 @@ import discord
 from discord import app_commands
 from discord.ext import tasks        
 from datetime import datetime
+from zoneinfo import ZoneInfo
 import sheets_client as sheets
 import asyncio
 
@@ -26,7 +27,9 @@ class MyClient(discord.Client):
         # Start background reminder loop AFTER the bot is ready/loop exists
         if not reminder_loop.is_running():
             reminder_loop.start()
-
+            
+        if not daily_refresh_loop.is_running():
+            daily_refresh_loop.start()
 
 client = MyClient()
 
@@ -225,6 +228,32 @@ async def remind_off(interaction: discord.Interaction):
 def _now_hhmm() -> str:
     return datetime.now().strftime("%H:%M")  # server time
 
+# ----- daily refresh config -----
+SCHEDULE_TZ = "Europe/Berlin"   # Berlin/CEST-CET with DST handled
+REFRESH_AT_HHMM = "00:05"       # run once per day at 00:05 in that timezone
+_last_refresh_date = None       # tracks last run (YYYY-MM-DD in SCHEDULE_TZ)
+
+def _now_hhmm_date_in_tz(tz: str):
+    now = datetime.now(ZoneInfo(tz))
+    return now.strftime("%H:%M"), now.date().isoformat()
+
+@tasks.loop(minutes=1)
+async def daily_refresh_loop():
+    global _last_refresh_date
+    try:
+        hhmm, today = _now_hhmm_date_in_tz(SCHEDULE_TZ)
+        # fire once when we hit REFRESH_AT_HHMM and haven't done it yet today
+        if hhmm == REFRESH_AT_HHMM and _last_refresh_date != today:
+            await asyncio.to_thread(sheets.refresh_schedule_preserve_overrides)
+            _last_refresh_date = today
+            print(f"[daily_refresh] refreshed for {today} ({SCHEDULE_TZ} {hhmm})")
+    except Exception as e:
+        print(f"[daily_refresh] error: {e}")
+
+@daily_refresh_loop.before_loop
+async def _wait_daily_refresh_ready():
+    await client.wait_until_ready()
+
 @tasks.loop(minutes=1)
 async def reminder_loop():
     try:
@@ -264,6 +293,7 @@ async def _wait_until_ready():
     await client.wait_until_ready()
 
 client.run(BOT_TOKEN)
+
 
 
 
