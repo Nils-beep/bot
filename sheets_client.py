@@ -32,7 +32,15 @@ _values = _svc.spreadsheets().values()
 
 TAB = "'Schedule'"     # visible schedule tab
 START_ROW = 6
-MONTH_COLS = [("A","B","C"), ("F","G","H"), ("K","L","M")]  # [weekday, date, Raid?]
+MONTH_COLS = [
+    ("A","B","C"),   # 1st month, Names=D, spacer=E
+    ("F","G","H"),   # 2nd month, Names=I, spacer=J
+    ("K","L","M"),   # 3rd month, Names=N, spacer=O
+    ("P","Q","R"),   # 4th month, Names=S, spacer=T
+    ("U","V","W"),   # 5th month, Names=X, spacer=Y
+    ("Z","AA","AB"), # 6th month, Names=AC, spacer=AD
+]
+NUM_BLOCKS = len(MONTH_COLS)
 
 CANT_TAB = "Cant"  # a simple log: who can't raid on which date
 CANT_RANGE = f"'{CANT_TAB}'!A1:D1"
@@ -206,7 +214,7 @@ def _desired_window(today: datetime) -> list[tuple[str,str,str]]:
     Defaults: Mon/Wed/Thu = ✔, otherwise ✖.
     """
     rows: list[tuple[str,str,str]] = []
-    for idx in range(3):
+    for idx in range(NUM_BLOCKS):
         m0 = today.month - 1 + idx
         y  = today.year + (m0 // 12)
         m  = (m0 % 12) + 1
@@ -248,7 +256,7 @@ def refresh_schedule_preserve_overrides():
 
     # Which (year,month) each block represents now
     month_tags: list[tuple[int,int]] = []
-    for idx in range(3):
+    for idx in range(NUM_BLOCKS):
         m0 = today.month - 1 + idx
         y  = today.year + (m0 // 12)
         m  = (m0 % 12) + 1
@@ -568,6 +576,7 @@ def is_today_raid_day() -> bool:
                 return True
     return False
 # ==============================================================================
+
 
 
 
