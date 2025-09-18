@@ -301,31 +301,6 @@ async def _wait_until_ready():
     await client.wait_until_ready()
 
 @client.tree.command(
-    name="when_refresh",
-    description="Show daily refresh debug info (Berlin time).",
-    guild=discord.Object(id=GUILD_ID)
-)
-async def when_refresh_cmd(interaction: discord.Interaction):
-    if interaction.channel_id != CHANNEL_ID:
-        await interaction.response.send_message("Only in appointments please :/", ephemeral=True)
-        return
-    await interaction.response.defer(ephemeral=True, thinking=True)
-
-    now_tz = datetime.now(ZoneInfo(SCHEDULE_TZ))
-    hhmm = now_tz.strftime("%H:%M")
-    today = now_tz.date().isoformat()
-    will_fire_now = (hhmm == REFRESH_AT_HHMM and _last_refresh_date != today)
-
-    msg = (
-        f"**Timezone:** {SCHEDULE_TZ}\n"
-        f"**Now:** {now_tz.strftime('%Y-%m-%d %H:%M:%S')}\n"
-        f"**Target:** {REFRESH_AT_HHMM}\n"
-        f"**Last Refresh Date:** {(_last_refresh_date or 'None')}\n"
-        f"**Would fire now?** {'✅ yes' if will_fire_now else '❌ no'}"
-    )
-    await interaction.followup.send(msg, ephemeral=True)
-
-@client.tree.command(
     name="set_timezone",
     description="Set your timezone (IANA name like Europe/Berlin or America/New_York).",
     guild=discord.Object(id=GUILD_ID)
@@ -351,6 +326,7 @@ async def set_timezone_cmd(interaction: discord.Interaction, tz: str):
     await interaction.followup.send(f"✅ Timezone saved: **{tz}**", ephemeral=True)
 
 client.run(BOT_TOKEN)
+
 
 
 
