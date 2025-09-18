@@ -152,7 +152,7 @@ async def refresh_cmd(interaction: discord.Interaction):
 # /remind on [time]
 @client.tree.command(
     name="remind_on",
-    description="Enable raid-day reminders (✔ days). Optional time HH:MM (server time).",
+    description="Enable raid-day reminders. Optional time HH:MM (Your selected timezone, server time if none).",
     guild=discord.Object(id=GUILD_ID)
 )
 @app_commands.describe(time="HH:MM (24h). Default 17:00")
@@ -302,6 +302,7 @@ async def set_timezone_cmd(interaction: discord.Interaction, tz: str):
     await interaction.followup.send(f"✅ Timezone saved: **{tz}**", ephemeral=True)
 
 client.run(BOT_TOKEN)
+
 
 
 
