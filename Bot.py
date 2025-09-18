@@ -234,7 +234,7 @@ def _now_hhmm_date_in_tz(tz: str):
 # ----- daily refresh (once per day, Berlin time) -----
 SCHEDULE_TZ = "Europe/Berlin"
 
-@tasks.loop(time=dtime(hour=12, minute=14, tzinfo=ZoneInfo(SCHEDULE_TZ)))
+@tasks.loop(time=dtime(hour=0, minute=1, tzinfo=ZoneInfo(SCHEDULE_TZ)))
 async def daily_refresh_loop():
     try:
         print(f"[daily_refresh] running at {datetime.now(ZoneInfo(SCHEDULE_TZ)).strftime('%Y-%m-%d %H:%M:%S %Z')}")
@@ -319,6 +319,7 @@ async def when_refresh_cmd(interaction: discord.Interaction):
 
 
 client.run(BOT_TOKEN)
+
 
 
 
