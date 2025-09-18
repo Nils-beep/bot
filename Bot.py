@@ -202,12 +202,12 @@ async def remind_on(interaction: discord.Interaction, time: str | None = None):
         True,
         hhmm
     )
-    await interaction.followup.send(f"✅ Reminders enabled at **{hhmm}** on ✔ days.", ephemeral=True)
+    await interaction.followup.send(f"✅ Reminders enabled at **{hhmm}** on raid days.", ephemeral=True)
 
 # /remind off
 @client.tree.command(
     name="remind_off",
-    description="Disable raid-day reminders.",
+    description="Disable raid reminders.",
     guild=discord.Object(id=GUILD_ID)
 )
 async def remind_off(interaction: discord.Interaction):
@@ -287,7 +287,7 @@ async def reminder_loop():
             return
 
         mentions = " ".join(f"<@{r['user_id']}>" for r in to_ping)
-        await channel.send(f"⏰ Raid reminder (✔ today)! {mentions}")
+        await channel.send(f"Wake up, we raidin' today! {mentions}")
 
         # Mark each user as notified using their local date (so we don't re-ping at 00:xx boundaries)
         for r in to_ping:
@@ -302,13 +302,13 @@ async def _wait_until_ready():
 
 @client.tree.command(
     name="set_timezone",
-    description="Set your timezone (IANA name like Europe/Berlin or America/New_York).",
+    description="Set your timezone (Examples: Europe/Berlin or Europe/London).",
     guild=discord.Object(id=GUILD_ID)
 )
-@app_commands.describe(tz="Your timezone (IANA). Example: Europe/Berlin")
+@app_commands.describe(tz="Your timezone. Example: Europe/Berlin")
 async def set_timezone_cmd(interaction: discord.Interaction, tz: str):
     if interaction.channel_id != CHANNEL_ID:
-        await interaction.response.send_message("Only in appointments please :/", ephemeral=True)
+        await interaction.response.send_message("Only in schedule-commands please :/", ephemeral=True)
         return
     await interaction.response.defer(ephemeral=True, thinking=True)
 
@@ -317,7 +317,7 @@ async def set_timezone_cmd(interaction: discord.Interaction, tz: str):
         ZoneInfo(tz)
     except Exception:
         await interaction.followup.send(
-            "Invalid timezone. Use an IANA name like `Europe/Berlin`, `America/New_York`, `Asia/Tokyo`.",
+            "Invalid timezone. Examples: Europe/Berlin, Europe/London.",
             ephemeral=True
         )
         return
@@ -326,6 +326,7 @@ async def set_timezone_cmd(interaction: discord.Interaction, tz: str):
     await interaction.followup.send(f"✅ Timezone saved: **{tz}**", ephemeral=True)
 
 client.run(BOT_TOKEN)
+
 
 
 
