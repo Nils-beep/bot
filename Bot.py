@@ -227,39 +227,26 @@ async def remind_off(interaction: discord.Interaction):
 def _now_hhmm() -> str:
     return datetime.now().strftime("%H:%M")  # server time
 
-# ----- daily refresh config -----
-SCHEDULE_TZ = "Europe/Berlin"
-REFRESH_AT_HHMM = "00:05"
-_last_refresh_date = None
-
-# TEMP: verbose logging for the refresh loop
-DEBUG_REFRESH = True
-
-
 def _now_hhmm_date_in_tz(tz: str):
     now = datetime.now(ZoneInfo(tz))
     return now.strftime("%H:%M"), now.date().isoformat()
 
-@tasks.loop(minutes=1)
+# ----- daily refresh (once per day, Berlin time) -----
+SCHEDULE_TZ = "Europe/Berlin"
+
+@tasks.loop(time=dtime(hour=12, minute=14, tzinfo=ZoneInfo(SCHEDULE_TZ)))
 async def daily_refresh_loop():
-    global _last_refresh_date
     try:
-        now_tz = datetime.now(ZoneInfo(SCHEDULE_TZ))
-        hhmm = now_tz.strftime("%H:%M")
-        today = now_tz.date().isoformat()
-
-        if DEBUG_REFRESH:
-            print(f"[daily_refresh] tick tz={SCHEDULE_TZ} now={now_tz.strftime('%Y-%m-%d %H:%M:%S')} "
-                  f"target={REFRESH_AT_HHMM} last={_last_refresh_date}")
-
-        # fire once when we hit REFRESH_AT_HHMM and haven't done it yet today
-        if hhmm == REFRESH_AT_HHMM and _last_refresh_date != today:
-            print("[daily_refresh] condition matched -> running refresh...")
-            await asyncio.to_thread(sheets.refresh_schedule_preserve_overrides)
-            _last_refresh_date = today
-            print(f"[daily_refresh] DONE for {today} ({SCHEDULE_TZ} {hhmm})")
+        print(f"[daily_refresh] running at {datetime.now(ZoneInfo(SCHEDULE_TZ)).strftime('%Y-%m-%d %H:%M:%S %Z')}")
+        await asyncio.to_thread(sheets.refresh_schedule_preserve_overrides)
+        print("[daily_refresh] refresh completed")
     except Exception as e:
         print(f"[daily_refresh] error: {e}")
+
+@daily_refresh_loop.before_loop
+async def _wait_daily_refresh_ready():
+    await client.wait_until_ready()
+
 
 
 @daily_refresh_loop.before_loop
@@ -332,6 +319,7 @@ async def when_refresh_cmd(interaction: discord.Interaction):
 
 
 client.run(BOT_TOKEN)
+
 
 
 
