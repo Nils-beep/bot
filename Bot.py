@@ -13,7 +13,6 @@ BOT_TOKEN  = os.environ["BOT_TOKEN"]
 CHANNEL_ID = 1417511115734388887
 GUILD_ID   = 627647267414999065
 
-
 class MyClient(discord.Client):
     def __init__(self):
         intents = discord.Intents.default()
@@ -229,26 +228,40 @@ def _now_hhmm() -> str:
     return datetime.now().strftime("%H:%M")  # server time
 
 # ----- daily refresh config -----
-SCHEDULE_TZ = "Europe/Berlin"   # Berlin/CEST-CET with DST handled
-REFRESH_AT_HHMM = "00:05"       # run once per day at 00:05 in that timezone
-_last_refresh_date = None       # tracks last run (YYYY-MM-DD in SCHEDULE_TZ)
+SCHEDULE_TZ = "Europe/Berlin"
+REFRESH_AT_HHMM = "00:05"
+_last_refresh_date = None
+
+# TEMP: verbose logging for the refresh loop
+DEBUG_REFRESH = True
+
 
 def _now_hhmm_date_in_tz(tz: str):
     now = datetime.now(ZoneInfo(tz))
     return now.strftime("%H:%M"), now.date().isoformat()
 
 @tasks.loop(minutes=1)
+@tasks.loop(minutes=1)
 async def daily_refresh_loop():
     global _last_refresh_date
     try:
-        hhmm, today = _now_hhmm_date_in_tz(SCHEDULE_TZ)
+        now_tz = datetime.now(ZoneInfo(SCHEDULE_TZ))
+        hhmm = now_tz.strftime("%H:%M")
+        today = now_tz.date().isoformat()
+
+        if DEBUG_REFRESH:
+            print(f"[daily_refresh] tick tz={SCHEDULE_TZ} now={now_tz.strftime('%Y-%m-%d %H:%M:%S')} "
+                  f"target={REFRESH_AT_HHMM} last={_last_refresh_date}")
+
         # fire once when we hit REFRESH_AT_HHMM and haven't done it yet today
         if hhmm == REFRESH_AT_HHMM and _last_refresh_date != today:
+            print("[daily_refresh] condition matched -> running refresh...")
             await asyncio.to_thread(sheets.refresh_schedule_preserve_overrides)
             _last_refresh_date = today
-            print(f"[daily_refresh] refreshed for {today} ({SCHEDULE_TZ} {hhmm})")
+            print(f"[daily_refresh] DONE for {today} ({SCHEDULE_TZ} {hhmm})")
     except Exception as e:
         print(f"[daily_refresh] error: {e}")
+
 
 @daily_refresh_loop.before_loop
 async def _wait_daily_refresh_ready():
@@ -292,7 +305,35 @@ async def reminder_loop():
 async def _wait_until_ready():
     await client.wait_until_ready()
 
+@client.tree.command(
+    name="when_refresh",
+    description="Show daily refresh debug info (Berlin time).",
+    guild=discord.Object(id=GUILD_ID)
+)
+async def when_refresh_cmd(interaction: discord.Interaction):
+    if interaction.channel_id != CHANNEL_ID:
+        await interaction.response.send_message("Only in appointments please :/", ephemeral=True)
+        return
+    await interaction.response.defer(ephemeral=True, thinking=True)
+
+    now_tz = datetime.now(ZoneInfo(SCHEDULE_TZ))
+    hhmm = now_tz.strftime("%H:%M")
+    today = now_tz.date().isoformat()
+    will_fire_now = (hhmm == REFRESH_AT_HHMM and _last_refresh_date != today)
+
+    msg = (
+        f"**Timezone:** {SCHEDULE_TZ}\n"
+        f"**Now:** {now_tz.strftime('%Y-%m-%d %H:%M:%S')}\n"
+        f"**Target:** {REFRESH_AT_HHMM}\n"
+        f"**Last Refresh Date:** {(_last_refresh_date or 'None')}\n"
+        f"**Would fire now?** {'✅ yes' if will_fire_now else '❌ no'}"
+    )
+    await interaction.followup.send(msg, ephemeral=True)
+
+
+
 client.run(BOT_TOKEN)
+
 
 
 
