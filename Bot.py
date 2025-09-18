@@ -134,30 +134,6 @@ async def can_cmd(interaction: discord.Interaction, date: str):
     else:
         await interaction.followup.send("Date not found in the current 3-month range.")
 
-@client.tree.command(
-    name="rebuild",
-    description="Rebuild the 3-month schedule (defaults: Mon/Wed/Thu = ✔).",
-    guild=discord.Object(id=GUILD_ID)
-)
-@app_commands.describe(start_from_day1="Start current month at day 1 instead of today (default: false)")
-async def rebuild_cmd(interaction: discord.Interaction, start_from_day1: bool = False):
-    if interaction.channel_id != CHANNEL_ID:
-        await interaction.response.send_message("Only in appointments please :/", ephemeral=True)
-        return
-
-    # Acknowledge within 3s to avoid 10062 Unknown interaction
-    await interaction.response.defer(ephemeral=True, thinking=True)
-
-    try:
-        # Run blocking Google API calls off the event loop
-        await asyncio.to_thread(
-            sheets.rebuild_schedule,
-            start_current_from_today=not start_from_day1
-        )
-        await interaction.followup.send("Schedule rebuilt.")
-    except Exception as e:
-        await interaction.followup.send(f"Rebuild failed: `{e}`")
-
 @client.tree.command(name="refresh", description="Refresh sheet (preserves ✔/✖ overrides).",
                      guild=discord.Object(id=GUILD_ID))
 async def refresh_cmd(interaction: discord.Interaction):
@@ -305,7 +281,7 @@ async def _wait_until_ready():
     description="Set your timezone (Examples: Europe/Berlin or Europe/London).",
     guild=discord.Object(id=GUILD_ID)
 )
-@app_commands.describe(tz="Your timezone. Example: Europe/Berlin")
+@app_commands.describe(tz="Your timezone. Example: Europe/Berlin, Europe/London")
 async def set_timezone_cmd(interaction: discord.Interaction, tz: str):
     if interaction.channel_id != CHANNEL_ID:
         await interaction.response.send_message("Only in schedule-commands please :/", ephemeral=True)
@@ -326,6 +302,7 @@ async def set_timezone_cmd(interaction: discord.Interaction, tz: str):
     await interaction.followup.send(f"✅ Timezone saved: **{tz}**", ephemeral=True)
 
 client.run(BOT_TOKEN)
+
 
 
 
