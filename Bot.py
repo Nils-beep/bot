@@ -4,7 +4,7 @@ import discord
 from discord import app_commands
 from discord.ext import tasks        
 from datetime import datetime, time as dtime
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import sheets_client as sheets
 import asyncio
 
@@ -256,7 +256,7 @@ async def _wait_daily_refresh_ready():
 @tasks.loop(minutes=1)
 async def reminder_loop():
     try:
-        # Fast exit if today isn’t a raid day
+        # Gate by global schedule (Berlin-based ✔ day)
         if not await asyncio.to_thread(sheets.is_today_raid_day):
             return
 
@@ -264,14 +264,24 @@ async def reminder_loop():
         if not reminders:
             return
 
-        now_hhmm = _now_hhmm()
-        today_iso = datetime.today().strftime("%Y-%m-%d")
-        to_ping = [r for r in reminders if (r["time"] == now_hhmm and r.get("last","") != today_iso)]
+        # Build the list of users to ping whose local time matches now and haven't been pinged today (in THEIR local day)
+        to_ping = []
+        for r in reminders:
+            tz = r.get("tz") or "Europe/Berlin"  # sensible default if user hasn't set tz yet
+            try:
+                now_local = datetime.now(ZoneInfo(tz))
+            except Exception:
+                now_local = datetime.now(ZoneInfo("Europe/Berlin"))
+            now_hhmm_local = now_local.strftime("%H:%M")
+            today_iso_local = now_local.date().isoformat()
+
+            if r["time"] == now_hhmm_local and r.get("last", "") != today_iso_local:
+                to_ping.append({**r, "today_iso_local": today_iso_local})
 
         if not to_ping:
             return
 
-        # Build mentions and send once
+        # Send a single message that mentions all users whose local reminder fired
         channel = client.get_channel(CHANNEL_ID)
         if channel is None:
             return
@@ -279,12 +289,11 @@ async def reminder_loop():
         mentions = " ".join(f"<@{r['user_id']}>" for r in to_ping)
         await channel.send(f"⏰ Raid reminder (✔ today)! {mentions}")
 
-        # Mark notified
+        # Mark each user as notified using their local date (so we don't re-ping at 00:xx boundaries)
         for r in to_ping:
-            await asyncio.to_thread(sheets.mark_notified, r["user_id"], today_iso)
+            await asyncio.to_thread(sheets.mark_notified, r["user_id"], r["today_iso_local"])
 
     except Exception as e:
-        # Optional: log to console
         print(f"[reminder_loop] error: {e}")
 
 @reminder_loop.before_loop
@@ -316,9 +325,33 @@ async def when_refresh_cmd(interaction: discord.Interaction):
     )
     await interaction.followup.send(msg, ephemeral=True)
 
+@client.tree.command(
+    name="set_timezone",
+    description="Set your timezone (IANA name like Europe/Berlin or America/New_York).",
+    guild=discord.Object(id=GUILD_ID)
+)
+@app_commands.describe(tz="Your timezone (IANA). Example: Europe/Berlin")
+async def set_timezone_cmd(interaction: discord.Interaction, tz: str):
+    if interaction.channel_id != CHANNEL_ID:
+        await interaction.response.send_message("Only in appointments please :/", ephemeral=True)
+        return
+    await interaction.response.defer(ephemeral=True, thinking=True)
 
+    # Validate the tz against the system database
+    try:
+        ZoneInfo(tz)
+    except Exception:
+        await interaction.followup.send(
+            "Invalid timezone. Use an IANA name like `Europe/Berlin`, `America/New_York`, `Asia/Tokyo`.",
+            ephemeral=True
+        )
+        return
+
+    await asyncio.to_thread(sheets.set_timezone, interaction.user.id, tz)
+    await interaction.followup.send(f"✅ Timezone saved: **{tz}**", ephemeral=True)
 
 client.run(BOT_TOKEN)
+
 
 
 
