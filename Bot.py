@@ -87,7 +87,7 @@ def _valid_date(date_str: str) -> bool:
 @app_commands.describe(date="Date like 7.9 or 7.9.2025 (year optional)")
 async def cant(interaction: discord.Interaction, date: str):
     if interaction.channel_id != CHANNEL_ID:
-        await interaction.response.send_message("Only in appointments please :/", ephemeral=True)
+        await interaction.response.send_message("Only in schedule-commands please :/", ephemeral=True)
         return
     await interaction.response.defer(ephemeral=True, thinking=True)
 
@@ -114,7 +114,7 @@ async def cant(interaction: discord.Interaction, date: str):
 @app_commands.describe(date="Date like 7.9 or 7.9.2025 (year optional)")
 async def can_cmd(interaction: discord.Interaction, date: str):
     if interaction.channel_id != CHANNEL_ID:
-        await interaction.response.send_message("Only in appointments please :/", ephemeral=True)
+        await interaction.response.send_message("Only in schedule-commands please :/", ephemeral=True)
         return
     await interaction.response.defer(ephemeral=True, thinking=True)
 
@@ -139,7 +139,7 @@ async def can_cmd(interaction: discord.Interaction, date: str):
 async def refresh_cmd(interaction: discord.Interaction):
     # optional: restrict to your bot channel
     if interaction.channel_id != CHANNEL_ID:
-        await interaction.response.send_message("Use this in the appointments channel.", ephemeral=True)
+        await interaction.response.send_message("Only in schedule-commands please :/", ephemeral=True)
         return
 
     await interaction.response.defer(ephemeral=True, thinking=True)
@@ -152,13 +152,13 @@ async def refresh_cmd(interaction: discord.Interaction):
 # /remind on [time]
 @client.tree.command(
     name="remind_on",
-    description="Enable raid-day reminders. Optional time HH:MM (Your selected timezone, server time if none).",
+    description="Enable raid reminder. Optional time HH:MM (Selected timezone otherwise server time).",
     guild=discord.Object(id=GUILD_ID)
 )
 @app_commands.describe(time="HH:MM (24h). Default 17:00")
 async def remind_on(interaction: discord.Interaction, time: str | None = None):
     if interaction.channel_id != CHANNEL_ID:
-        await interaction.response.send_message("Only in appointments please :/", ephemeral=True)
+        await interaction.response.send_message("Only in schedule-commands please :/", ephemeral=True)
         return
     await interaction.response.defer(ephemeral=True, thinking=True)
 
@@ -188,7 +188,7 @@ async def remind_on(interaction: discord.Interaction, time: str | None = None):
 )
 async def remind_off(interaction: discord.Interaction):
     if interaction.channel_id != CHANNEL_ID:
-        await interaction.response.send_message("Only in appointments please :/", ephemeral=True)
+        await interaction.response.send_message("Only in schedule-commands please :/", ephemeral=True)
         return
     await interaction.response.defer(ephemeral=True, thinking=True)
 
@@ -302,6 +302,7 @@ async def set_timezone_cmd(interaction: discord.Interaction, tz: str):
     await interaction.followup.send(f"✅ Timezone saved: **{tz}**", ephemeral=True)
 
 client.run(BOT_TOKEN)
+
 
 
 
