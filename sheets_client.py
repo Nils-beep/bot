@@ -401,7 +401,7 @@ def _rem_a1(suffix: str) -> str:
 
 def _ensure_reminders_header():
     """Ensure header exists at A300:E300 on the Schedule sheet."""
-    hdr_rng = _rem_a1(f"A{REM_START_ROW}:E{REM_START_ROW}")
+    hdr_rng = _rem_a1(f"A{REM_START_ROW}:F{REM_START_ROW}")
     existing = _values.get(spreadsheetId=SPREADSHEET_ID, range=hdr_rng).execute().get("values", [])
     hdr = ["UserID","UserTag","Enabled","Time","LastNotified"]
     if not existing or existing[0] != hdr:
@@ -411,6 +411,61 @@ def _ensure_reminders_header():
             valueInputOption="USER_ENTERED",
             body={"values":[hdr]}
         ).execute()
+
+def set_timezone(user_id: int, tz_str: str):
+    """
+    Upsert the user's IANA timezone (e.g., 'Europe/Berlin') in column F.
+    """
+    _ensure_reminders_header()
+    data_rng = _rem_a1(f"A{REM_START_ROW+1}:F{REM_START_ROW+REM_MAX_ROWS}")
+    rows = _values.get(spreadsheetId=SPREADSHEET_ID, range=data_rng).execute().get("values", []) or []
+    uid = str(user_id)
+
+    # find existing row
+    found_i = None
+    for i, r in enumerate(rows):
+        if r and len(r) >= 1 and r[0] == uid:
+            found_i = i
+            break
+
+    if found_i is None:
+        # append new row with defaults and tz set
+        append_rownum = REM_START_ROW + 1 + len(rows)
+        _values.update(
+            spreadsheetId=SPREADSHEET_ID,
+            range=_rem_a1(f"A{append_rownum}:F{append_rownum}"),
+            valueInputOption="USER_ENTERED",
+            body={"values":[[uid, "", "N", "17:00", "", tz_str]]}
+        ).execute()
+    else:
+        rownum = REM_START_ROW + 1 + found_i
+        # patch only column F
+        _values.update(
+            spreadsheetId=SPREADSHEET_ID,
+            range=_rem_a1(f"F{rownum}"),
+            valueInputOption="USER_ENTERED",
+            body={"values":[[tz_str]]}
+        ).execute()
+
+def get_enabled_reminders() -> list[dict]:
+    """
+    Return enabled reminders (with timezone if present):
+      [{'user_id': int, 'time': 'HH:MM', 'last': 'YYYY-MM-DD', 'tz': 'Europe/Berlin'}]
+    """
+    _ensure_reminders_header()
+    data_rng = _rem_a1(f"A{REM_START_ROW+1}:F{REM_START_ROW+REM_MAX_ROWS}")
+    rows = _values.get(spreadsheetId=SPREADSHEET_ID, range=data_rng).execute().get("values", []) or []
+    out = []
+    for r in rows:
+        if len(r) >= 4 and str(r[2]).upper() == "Y":
+            out.append({
+                "user_id": int(r[0]),
+                "time": r[3],
+                "last": (r[4] if len(r) >= 5 else ""),
+                "tz":   (r[5] if len(r) >= 6 and r[5] else ""),  # may be empty
+            })
+    return out
+
 
 def _clean_hhmm(hhmm: str) -> str:
     """Very small HH:MM sanity (00:00..23:59). Returns cleaned or raises ValueError."""
@@ -429,7 +484,7 @@ def set_reminder(user_id: int, user_tag: str, enable: bool, time_hhmm: str = "17
     _ensure_reminders_header()
     time_hhmm = _clean_hhmm(time_hhmm)
 
-    data_rng = _rem_a1(f"A{REM_START_ROW+1}:E{REM_START_ROW+REM_MAX_ROWS}")
+    data_rng = _rem_a1(f"A{REM_START_ROW+1}:F{REM_START_ROW+REM_MAX_ROWS}")
     resp = _values.get(spreadsheetId=SPREADSHEET_ID, range=data_rng).execute()
     rows = resp.get("values", []) or []
 
@@ -513,6 +568,7 @@ def is_today_raid_day() -> bool:
                 return True
     return False
 # ==============================================================================
+
 
 
 
