@@ -263,11 +263,11 @@ def refresh_schedule_preserve_overrides():
         month_tags.append((y, m))
 
     # Partition desired rows per visual block
-    per_block: list[list[tuple[str,str,str]]] = [[], [], []]
+    per_block: list[list[tuple[str,str,str]]] = [[] for _ in range(NUM_BLOCKS)]
     for wd, date_s, default_flag in desired:
         dt = datetime.strptime(date_s, "%d.%m.%Y")
         ym = (dt.year, dt.month)
-        blk = month_tags.index(ym) if ym in month_tags else 2
+        blk = month_tags.index(ym) if ym in month_tags else (NUM_BLOCKS - 1)
         per_block[blk].append((wd, date_s, default_flag))
 
     # Write each block with preserved flags & names
@@ -422,7 +422,8 @@ def _ensure_reminders_header():
     """Ensure header exists at A300:E300 on the Schedule sheet."""
     hdr_rng = _rem_a1(f"A{REM_START_ROW}:F{REM_START_ROW}")
     existing = _values.get(spreadsheetId=SPREADSHEET_ID, range=hdr_rng).execute().get("values", [])
-    hdr = ["UserID","UserTag","Enabled","Time","LastNotified"]
+    hdr = ["UserID","UserTag","Enabled","Time","LastNotified","Timezone"]
+
     if not existing or existing[0] != hdr:
         _values.update(
             spreadsheetId=SPREADSHEET_ID,
@@ -481,7 +482,7 @@ def get_enabled_reminders() -> list[dict]:
                 "user_id": int(r[0]),
                 "time": r[3],
                 "last": (r[4] if len(r) >= 5 else ""),
-                "tz":   (r[5] if len(r) >= 6 and r[5] else ""),  # may be empty
+                "tz":   (r[5] if len(r) >= 6 and r[5] else ""),
             })
     return out
 
@@ -536,25 +537,6 @@ def set_reminder(user_id: int, user_tag: str, enable: bool, time_hhmm: str = "17
             body={"values":[[uid, user_tag, enabled, time_hhmm, last]]}
         ).execute()
 
-def get_enabled_reminders() -> list[dict]:
-    """
-    Return enabled reminders from the block at A300+:
-      [{'user_id': int, 'time': 'HH:MM', 'last': 'YYYY-MM-DD'}]
-    """
-    _ensure_reminders_header()
-    data_rng = _rem_a1(f"A{REM_START_ROW+1}:E{REM_START_ROW+REM_MAX_ROWS}")
-    rows = _values.get(spreadsheetId=SPREADSHEET_ID, range=data_rng).execute().get("values", []) or []
-    out = []
-    for r in rows:
-        # r may be shorter than 5 if user hand-deleted trailing cells
-        if len(r) >= 4 and str(r[2]).upper() == "Y":
-            out.append({
-                "user_id": int(r[0]),
-                "time": r[3],
-                "last": (r[4] if len(r) >= 5 else "")
-            })
-    return out
-
 def mark_notified(user_id: int, date_iso: str):
     """
     Set LastNotified (column E) for the user in the A300+ block.
@@ -587,6 +569,7 @@ def is_today_raid_day() -> bool:
                 return True
     return False
 # ==============================================================================
+
 
 
 
