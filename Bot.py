@@ -241,7 +241,6 @@ def _now_hhmm_date_in_tz(tz: str):
     return now.strftime("%H:%M"), now.date().isoformat()
 
 @tasks.loop(minutes=1)
-@tasks.loop(minutes=1)
 async def daily_refresh_loop():
     global _last_refresh_date
     try:
@@ -333,6 +332,7 @@ async def when_refresh_cmd(interaction: discord.Interaction):
 
 
 client.run(BOT_TOKEN)
+
 
 
 
