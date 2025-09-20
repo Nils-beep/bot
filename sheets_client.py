@@ -88,22 +88,35 @@ def _read_month_block(cols: tuple[str,str,str]):
             index_by_date[date_s] = (i, cur)
     return rows, index_by_date
 
-def set_raid_date_in_visible_table(date_str: str, can_raid: bool) -> bool:
-    """Set Raid? for a date to ✔/✖ in any of the three month blocks."""
-    value = "✔" if can_raid else "✖"
+_PLANNED_DAYS = {0, 2, 3}  # Mo=0, Mi=2, Do=3
+
+def set_raid_date_in_visible_table(date_str: str, value: str, *, only_on_planned: bool = True) -> bool:
+    """
+    Setzt das Raid?-Feld auf '✔' oder '✖'.
+    Wenn only_on_planned=True, wird an Nicht-Raidtagen NICHT umgestellt.
+    Rückgabe: True wenn geschrieben, False wenn übersprungen.
+    """
+    if only_on_planned:
+        dt = datetime.strptime(date_str, "%d.%m.%Y")
+        if dt.weekday() not in _PLANNED_DAYS:
+            return False  # Tag bleibt '✖'
+
+    # --- dein bisheriger Code zum Finden/Schreiben des Felds ---
     for (c1, c2, c3) in MONTH_COLS:
-        rows, idx = _read_month_block((c1,c2,c3))
+        rows, idx = _read_month_block((c1, c2, c3))
         hit = idx.get(date_str)
-        if hit:
-            row_i, _ = hit
-            target_row = START_ROW + row_i
-            _values.update(
-                spreadsheetId=SPREADSHEET_ID,
-                range=f"{TAB}!{c3}{target_row}",
-                valueInputOption="USER_ENTERED",
-                body={"values":[[value]]}
-            ).execute()
-            return True
+        if not hit:
+            continue
+        row_i, _ = hit
+        target_row = START_ROW + row_i
+        # c3 ist die "Raid?"-Spalte
+        _values.update(
+            spreadsheetId=SPREADSHEET_ID,
+            range=_a1(f"{c3}{target_row}"),
+            valueInputOption="USER_ENTERED",
+            body={"values": [[value]]},
+        ).execute()
+        return True
     return False
 
 def toggle_raid_date_in_visible_table(date_str: str) -> str | None:
@@ -569,6 +582,7 @@ def is_today_raid_day() -> bool:
                 return True
     return False
 # ==============================================================================
+
 
 
 
