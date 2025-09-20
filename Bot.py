@@ -1,8 +1,6 @@
 # bot.py
 import os
-import discord
-from discord import app_commands
-from discord.ext import tasks        
+import discord    
 from datetime import datetime, time as dtime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import sheets_client as sheets
@@ -14,6 +12,10 @@ CHANNEL_ID = 1417511115734388887
 GUILD_ID   = 627647267414999065
 PLANNED_DAYS = {0, 2, 3}
 BERLIN = ZoneInfo("Europe/Berlin")  # du nutzt Berlin bereits
+
+EMBED_COLOR = discord.Color.gold()        # pick any color
+BANNER_URL  = None                        # set to an image URL if you want a header banner
+
 
 class MyClient(discord.Client):
     def __init__(self):
@@ -338,20 +340,26 @@ def _format_next7(days: list[dict]) -> str:
     return "📅 **Next 7 Raid Days** 📅\n" + "\n".join(lines)
 
 async def _upsert_dashboard_message(channel: discord.TextChannel):
-    days = await asyncio.to_thread(sheets.get_next_raid_days, 7)
-    content = _format_next7(days)
+    try:
+        days = await asyncio.to_thread(sheets.get_next_raid_days, 7)
+        embed = _build_next7_embed(days)
 
-    msg_id = await asyncio.to_thread(sheets.get_next7_message_id)
-    if msg_id:
-        try:
-            msg = await channel.fetch_message(msg_id)
-            await msg.edit(content=content)
-            return
-        except discord.NotFound:
-            pass  # gelöschte Nachricht -> neu erstellen
+        msg_id = await asyncio.to_thread(sheets.get_next7_message_id)
+        if msg_id:
+            try:
+                msg = await channel.fetch_message(msg_id)
+                await msg.edit(content=None, embed=embed)   # edit the existing embed
+                print(f"[next7] edited message {msg.id}")
+                return
+            except discord.NotFound:
+                print(f"[next7] stored message {msg_id} not found; creating new")
 
-    sent = await channel.send(content)
-    await asyncio.to_thread(sheets.set_next7_message_id, sent.id)
+        sent = await channel.send(embed=embed)              # send a new embed
+        await asyncio.to_thread(sheets.set_next7_message_id, sent.id)
+        print(f"[next7] posted new message {sent.id}")
+    except Exception as e:
+        print(f"[next7] error: {e}")
+        raise
 
 @tasks.loop(time=dtime(hour=4, minute=5, tzinfo=BERLIN))
 async def next7_dashboard_loop():
@@ -390,8 +398,35 @@ async def _refresh_next7_now():
             return
     await _upsert_dashboard_message(ch)
 
+def _build_next7_embed(days: list[dict]) -> discord.Embed:
+    # Title + timestamp give you the nice header + left color bar
+    embed = discord.Embed(
+        title="Next 7 Raid Days",
+        description="",                   # we’ll fill below
+        color=EMBED_COLOR,
+        timestamp=dt.datetime.now(tz=BERLIN)
+    )
+
+    # Optional banner at the top of the card
+    if BANNER_URL:
+        embed.set_image(url=BANNER_URL)
+
+    # Pretty list: date first, then weekday
+    if not days:
+        embed.description = "_No upcoming raid days found._"
+    else:
+        lines = [f"• **{d['date']}** ({d['weekday']})" for d in days]
+        embed.description = "\n".join(lines)
+
+    # A subtle divider + footer
+    embed.add_field(name="\u200b", value="—", inline=False)
+    embed.set_footer(text="Updates daily • Sheet-driven")
+
+    return embed
+
 
 client.run(BOT_TOKEN)
+
 
 
 
