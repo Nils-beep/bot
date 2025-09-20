@@ -92,16 +92,16 @@ _PLANNED_DAYS = {0, 2, 3}  # Mo=0, Mi=2, Do=3
 
 def set_raid_date_in_visible_table(date_str: str, value: str, *, only_on_planned: bool = True) -> bool:
     """
-    Setzt das Raid?-Feld auf '✔' oder '✖'.
-    Wenn only_on_planned=True, wird an Nicht-Raidtagen NICHT umgestellt.
-    Rückgabe: True wenn geschrieben, False wenn übersprungen.
+    Sets the Raid? field to '✔' or '✖'.
+    If only_on_planned=True, it will NOT change on non-raid days.
+    Returns: True if it wrote a value, False if skipped.
     """
     if only_on_planned:
         dt = datetime.strptime(date_str, "%d.%m.%Y")
         if dt.weekday() not in _PLANNED_DAYS:
-            return False  # Tag bleibt '✖'
+            return False  # leave ✖ as-is
 
-    # --- dein bisheriger Code zum Finden/Schreiben des Felds ---
+    # --- your existing code that finds the row and writes the value ---
     for (c1, c2, c3) in MONTH_COLS:
         rows, idx = _read_month_block((c1, c2, c3))
         hit = idx.get(date_str)
@@ -109,7 +109,6 @@ def set_raid_date_in_visible_table(date_str: str, value: str, *, only_on_planned
             continue
         row_i, _ = hit
         target_row = START_ROW + row_i
-        # c3 ist die "Raid?"-Spalte
         _values.update(
             spreadsheetId=SPREADSHEET_ID,
             range=_a1(f"{c3}{target_row}"),
@@ -582,6 +581,7 @@ def is_today_raid_day() -> bool:
                 return True
     return False
 # ==============================================================================
+
 
 
 
