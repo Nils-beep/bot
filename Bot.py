@@ -328,7 +328,7 @@ def _format_next7(days: list[dict]) -> str:
     lines = []
     for d in days:
         # Example: 22.09.2025 (Mon)
-        lines.append(f"• **{d['date']}** ({d['weekday']})")
+        lines.append(f" **{d['date']}** ({d['weekday']})")
 
     return "📅 **Next 7 Raid Days** 📅\n" + "\n".join(lines)
 
@@ -378,6 +378,7 @@ async def next7_cmd(interaction: discord.Interaction):
 
 
 client.run(BOT_TOKEN)
+
 
 
 
