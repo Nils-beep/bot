@@ -35,6 +35,9 @@ class MyClient(discord.Client):
         if not next7_dashboard_loop.is_running():
             next7_dashboard_loop.start()
 
+        # Update immediately at startup
+        await _refresh_next7_now()
+
         # optional: sofort beim Start aktualisieren
         ch = self.get_channel(CHANNEL_ID)
         if ch:
@@ -114,6 +117,7 @@ async def cant(interaction: discord.Interaction, date: str):
         await interaction.followup.send(f"Saved: **{norm}** → ✖  (can't: {names})")
     else:
         await interaction.followup.send("Date not found in the current 3-month range.")
+    asyncio.create_task(_refresh_next7_now())
 
 # /can — remove name; if none left → ✔, else keep ✖
 @client.tree.command(
@@ -152,6 +156,7 @@ async def can_cmd(interaction: discord.Interaction, date: str):
             await interaction.followup.send(f"Updated: **{norm}** → ✔  (nobody marked as can't)")
     else:
         await interaction.followup.send("Date not found in the current 3-month range.")
+    asyncio.create_task(_refresh_next7_now())
 
 @client.tree.command(name="refresh", description="Refresh sheet (preserves ✔/✖ overrides).",
                      guild=discord.Object(id=GUILD_ID))
@@ -375,9 +380,19 @@ async def next7_cmd(interaction: discord.Interaction):
         await interaction.followup.send(f"❌ Failed: `{e}`", ephemeral=True)
         print(f"[next7_cmd] error: {e}")
 
+async def _refresh_next7_now():
+    ch = client.get_channel(CHANNEL_ID)
+    if ch is None:
+        try:
+            ch = await client.fetch_channel(CHANNEL_ID)
+        except Exception as e:
+            print(f"[next7] fetch_channel failed: {e}")
+            return
+    await _upsert_dashboard_message(ch)
 
 
 client.run(BOT_TOKEN)
+
 
 
 
