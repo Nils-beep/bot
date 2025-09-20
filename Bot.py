@@ -13,6 +13,7 @@ BOT_TOKEN  = os.environ["BOT_TOKEN"]
 CHANNEL_ID = 1417511115734388887
 GUILD_ID   = 627647267414999065
 PLANNED_DAYS = {0, 2, 3}
+BERLIN = ZoneInfo("Europe/Berlin")  # du nutzt Berlin bereits
 
 class MyClient(discord.Client):
     def __init__(self):
@@ -311,7 +312,45 @@ async def set_timezone_cmd(interaction: discord.Interaction, tz: str):
     await asyncio.to_thread(sheets.set_timezone, interaction.user.id, tz)
     await interaction.followup.send(f"✅ Timezone saved: **{tz}**", ephemeral=True)
 
+
+def _format_next7(days: list[dict]) -> str:
+    if not days:
+        return "**Next 7 Raid Days**\nNo upcoming raid days found."
+    lines = []
+    for d in days:
+        # Zeige Anzahl der Anmeldungen; falls lieber Namen: ', '.join(d['names'])
+        names_part = f" — {len(d['names'])} signed up" if d["names"] else ""
+        lines.append(f"{d['weekday']} {d['date']}{names_part}")
+    return "**Next 7 Raid Days**\n" + "\n".join(lines)
+
+async def _upsert_dashboard_message(channel: discord.TextChannel):
+    days = await asyncio.to_thread(sheets.get_next_raid_days, 7)
+    content = _format_next7(days)
+
+    msg_id = await asyncio.to_thread(sheets.get_next7_message_id)
+    if msg_id:
+        try:
+            msg = await channel.fetch_message(msg_id)
+            await msg.edit(content=content)
+            return
+        except discord.NotFound:
+            pass  # gelöschte Nachricht -> neu erstellen
+
+    sent = await channel.send(content)
+    await asyncio.to_thread(sheets.set_next7_message_id, sent.id)
+
+@tasks.loop(time=dtime.time(hour=4, minute=5, tzinfo=BERLIN))
+async def next7_dashboard_loop():
+    channel = client.get_channel(CHANNEL_ID)
+    if channel:
+        await _upsert_dashboard_message(channel)
+
+@next7_dashboard_loop.before_loop
+async def _wait_next7_ready():
+    await client.wait_until_ready()
+
 client.run(BOT_TOKEN)
+
 
 
 
