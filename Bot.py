@@ -32,6 +32,14 @@ class MyClient(discord.Client):
         if not daily_refresh_loop.is_running():
             daily_refresh_loop.start()
 
+        if not next7_dashboard_loop.is_running():
+            next7_dashboard_loop.start()
+
+        # optional: sofort beim Start aktualisieren
+        ch = self.get_channel(CHANNEL_ID)
+        if ch:
+            await _upsert_dashboard_message(ch)
+
 client = MyClient()
 
 def normalize_date(user_input: str) -> str:
@@ -350,6 +358,7 @@ async def _wait_next7_ready():
     await client.wait_until_ready()
 
 client.run(BOT_TOKEN)
+
 
 
 
