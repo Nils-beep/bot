@@ -219,7 +219,7 @@ def _now_hhmm_date_in_tz(tz: str):
 # ----- daily refresh (once per day, Berlin time) -----
 SCHEDULE_TZ = "Europe/Berlin"
 
-@tasks.loop(time=dtime(hour=0, minute=1, tzinfo=ZoneInfo(SCHEDULE_TZ)))
+@tasks.loop(time=dtime(hour=4, minute=0, tzinfo=ZoneInfo(SCHEDULE_TZ)))
 async def daily_refresh_loop():
     try:
         print(f"[daily_refresh] running at {datetime.now(ZoneInfo(SCHEDULE_TZ)).strftime('%Y-%m-%d %H:%M:%S %Z')}")
@@ -311,6 +311,7 @@ async def set_timezone_cmd(interaction: discord.Interaction, tz: str):
     await interaction.followup.send(f"✅ Timezone saved: **{tz}**", ephemeral=True)
 
 client.run(BOT_TOKEN)
+
 
 
 
