@@ -339,7 +339,7 @@ async def _upsert_dashboard_message(channel: discord.TextChannel):
     sent = await channel.send(content)
     await asyncio.to_thread(sheets.set_next7_message_id, sent.id)
 
-@tasks.loop(time=dtime.time(hour=4, minute=5, tzinfo=BERLIN))
+@tasks.loop(time=dtime(hour=4, minute=5, tzinfo=BERLIN))
 async def next7_dashboard_loop():
     channel = client.get_channel(CHANNEL_ID)
     if channel:
@@ -350,6 +350,7 @@ async def _wait_next7_ready():
     await client.wait_until_ready()
 
 client.run(BOT_TOKEN)
+
 
 
 
