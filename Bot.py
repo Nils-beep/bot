@@ -357,7 +357,25 @@ async def next7_dashboard_loop():
 async def _wait_next7_ready():
     await client.wait_until_ready()
 
+@client.tree.command(
+    name="next7",
+    description="Post/Update the 'Next 7 Raid Days' dashboard now.",
+    guild=discord.Object(id=GUILD_ID)
+)
+async def next7_cmd(interaction: discord.Interaction):
+    if interaction.channel_id != CHANNEL_ID:
+        await interaction.response.send_message("Only in the schedule channel please :/", ephemeral=True)
+        return
+    await interaction.response.defer(ephemeral=True, thinking=True)
+    try:
+        await _upsert_dashboard_message(interaction.channel)
+        await interaction.followup.send("✅ Dashboard updated.", ephemeral=True)
+    except Exception as e:
+        await interaction.followup.send(f"❌ Failed: `{e}`", ephemeral=True)
+        print(f"[next7_cmd] error: {e}")
+
 client.run(BOT_TOKEN)
+
 
 
 
