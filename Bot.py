@@ -406,7 +406,7 @@ def _build_next7_embed(days: list[dict]) -> discord.Embed:
         title="Next 7 Raid Days",
         description="",                   # we’ll fill below
         color=EMBED_COLOR,
-        timestamp=dt.datetime.now(tz=BERLIN)
+        timestamp=dtime.now(tz=BERLIN)
     )
 
     # Optional banner at the top of the card
@@ -428,6 +428,7 @@ def _build_next7_embed(days: list[dict]) -> discord.Embed:
 
 
 client.run(BOT_TOKEN)
+
 
 
 
