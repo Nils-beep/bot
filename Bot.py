@@ -323,13 +323,14 @@ async def set_timezone_cmd(interaction: discord.Interaction, tz: str):
 
 def _format_next7(days: list[dict]) -> str:
     if not days:
-        return "**Next 7 Raid Days**\nNo upcoming raid days found."
+        return "📅 **Next 7 Raid Days** 📅\n_No upcoming raid days found._"
+
     lines = []
     for d in days:
-        # Zeige Anzahl der Anmeldungen; falls lieber Namen: ', '.join(d['names'])
-        names_part = f" — {len(d['names'])} signed up" if d["names"] else ""
-        lines.append(f"{d['weekday']} {d['date']}{names_part}")
-    return "**Next 7 Raid Days**\n" + "\n".join(lines)
+        # Example: 22.09.2025 (Mon)
+        lines.append(f"• **{d['date']}** ({d['weekday']})")
+
+    return "📅 **Next 7 Raid Days** 📅\n" + "\n".join(lines)
 
 async def _upsert_dashboard_message(channel: discord.TextChannel):
     days = await asyncio.to_thread(sheets.get_next_raid_days, 7)
@@ -374,7 +375,10 @@ async def next7_cmd(interaction: discord.Interaction):
         await interaction.followup.send(f"❌ Failed: `{e}`", ephemeral=True)
         print(f"[next7_cmd] error: {e}")
 
+
+
 client.run(BOT_TOKEN)
+
 
 
 
