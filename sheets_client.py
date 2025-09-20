@@ -4,9 +4,11 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from datetime import datetime
 import calendar
+from zoneinfo import ZoneInfo
 
 SPREADSHEET_ID = "1lCXsPkRyTQff15z7RD7bRV_l4R0ciU1U5oalMD9XOdc"
 SCOPES         = ["https://www.googleapis.com/auth/spreadsheets"]
+META_KEY_ROW = 3
 
 def _build_creds():
     """
@@ -580,7 +582,70 @@ def is_today_raid_day() -> bool:
             if len(r) >= 3 and r[1] and r[1].strip() == today_s and r[2].strip() == "✔":
                 return True
     return False
+
+def _meta_a1(a1: str) -> str:
+    return f"{TAB}!{a1}"
+
+def get_next7_message_id() -> int | None:
+    """Liest die Dashboard-Message-ID aus A3:B3 (key='Next7MessageId')."""
+    rng = _meta_a1(f"A{META_KEY_ROW}:B{META_KEY_ROW}")
+    vals = _values.get(spreadsheetId=SPREADSHEET_ID, range=rng).execute().get("values", [])
+    if vals and vals[0] and len(vals[0]) >= 2 and vals[0][0] == "Next7MessageId":
+        try:
+            return int(vals[0][1])
+        except Exception:
+            return None
+    return None
+
+def set_next7_message_id(message_id: int) -> None:
+    """Schreibt die Dashboard-Message-ID nach A3:B3 (key='Next7MessageId')."""
+    rng = _meta_a1(f"A{META_KEY_ROW}:B{META_KEY_ROW}")
+    _values.update(
+        spreadsheetId=SPREADSHEET_ID,
+        range=rng,
+        valueInputOption="USER_ENTERED",
+        body={"values": [["Next7MessageId", str(message_id)]]}
+    ).execute()
+
+# === ADD: Nächste n Raid-Tage aus dem sichtbaren Grid lesen ===
+def get_next_raid_days(n: int = 7) -> list[dict]:
+    """
+    Liefert die nächsten n Raid-Tage (✔) ab heute (Europe/Berlin) aus dem sichtbaren Plan.
+    Items: {"date": "dd.mm.YYYY", "weekday": "Monday", "names": [..]}
+    """
+    berlin = ZoneInfo("Europe/Berlin")
+    today  = datetime.now(berlin).date()
+    found: list[dict] = []
+
+    for (c1, c2, c3) in MONTH_COLS:
+        rows, _idx = _read_month_block((c1, c2, c3))
+        names_col  = _next_col(c3)
+
+        for i, row in enumerate(rows):
+            if len(row) < 3:
+                continue
+            weekday_s, date_s, flag = row[0], row[1], row[2]
+            try:
+                dt = datetime.strptime(date_s, "%d.%m.%Y").date()
+            except Exception:
+                continue
+            if dt < today:
+                continue
+            if str(flag).strip() != "✔":
+                continue
+
+            names_rng = f"{TAB}!{names_col}{START_ROW + i}"
+            vals = _values.get(spreadsheetId=SPREADSHEET_ID, range=names_rng).execute().get("values", [])
+            cell = vals[0][0] if vals and vals[0] else ""
+            names = [s.strip() for s in str(cell).replace(",", "\n").split("\n") if s.strip()]
+
+            found.append({"date": date_s, "weekday": weekday_s, "names": names})
+            if len(found) >= n:
+                return found
+
+    return found
 # ==============================================================================
+
 
 
 
