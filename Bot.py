@@ -12,6 +12,7 @@ import asyncio
 BOT_TOKEN  = os.environ["BOT_TOKEN"]
 CHANNEL_ID = 1417511115734388887
 GUILD_ID   = 627647267414999065
+PLANNED_DAYS = {0, 2, 3}
 
 class MyClient(discord.Client):
     def __init__(self):
@@ -311,6 +312,7 @@ async def set_timezone_cmd(interaction: discord.Interaction, tz: str):
     await interaction.followup.send(f"✅ Timezone saved: **{tz}**", ephemeral=True)
 
 client.run(BOT_TOKEN)
+
 
 
 
