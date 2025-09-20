@@ -123,6 +123,15 @@ async def can_cmd(interaction: discord.Interaction, date: str):
     except ValueError as e:
         await interaction.followup.send(f"Invalid date: {e}. Examples: 7.9  or  07.09.2025")
         return
+        
+# NEW: only allow ✔ on planned raid days (Mon/Wed/Thu)
+    dt = datetime.strptime(norm, "%d.%m.%Y")
+    if dt.weekday() not in PLANNED_DAYS:
+        await interaction.followup.send(
+            "That date is **not a planned raid day** (Mon/Wed/Thu) – it stays **✖**.",
+            ephemeral=True
+        )
+        return
 
     user_name = interaction.user.display_name or interaction.user.name
     found, new_flag, names = await asyncio.to_thread(sheets.remove_cant_user, norm, user_name)
@@ -302,6 +311,7 @@ async def set_timezone_cmd(interaction: discord.Interaction, tz: str):
     await interaction.followup.send(f"✅ Timezone saved: **{tz}**", ephemeral=True)
 
 client.run(BOT_TOKEN)
+
 
 
 
