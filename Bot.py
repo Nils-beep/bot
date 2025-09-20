@@ -1,6 +1,7 @@
 # bot.py
 import os
 import discord    
+from discord import app_commands
 from datetime import datetime, time as dtime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import sheets_client as sheets
